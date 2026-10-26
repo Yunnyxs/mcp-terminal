@@ -1,0 +1,8 @@
+/terminal-mcp
+/tmcp
+/fakemcp
+*.test
+*.out
+.env
+config.env
+mcps.json

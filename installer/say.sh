@@ -1,0 +1,2 @@
+# shellcheck shell=bash
+say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }

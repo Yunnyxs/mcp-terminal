@@ -1,0 +1,2 @@
+# shellcheck shell=bash
+warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }

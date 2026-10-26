@@ -1,0 +1,12 @@
+[Unit]
+Description=terminal-mcp (Go) - MCP server
+After=default.target
+
+[Service]
+EnvironmentFile=%h/.config/terminal-mcp/config.env
+ExecStart=%h/.local/bin/terminal-mcp serve
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
