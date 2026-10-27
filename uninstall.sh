@@ -13,7 +13,6 @@ RC_LINE='export PATH="$HOME/.local/bin:$PATH"'
 SERVICES=(terminal-mcp-tunnel.service terminal-mcp.service)
 CGROUP_FILE="${UNINSTALL_CGROUP_FILE:-/proc/self/cgroup}"
 
-# shellcheck source=/dev/null
 for f in say die warn; do source "$KIT/installer/$f.sh"; done
 
 DRY=0 YES=0 KEEP_NOTES=0 KEEP_TRASH=0 RM_CF=0

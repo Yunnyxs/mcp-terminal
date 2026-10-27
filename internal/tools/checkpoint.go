@@ -168,7 +168,6 @@ func execCheckpoint(_ config.Settings, p checkpointPlan) (*mcp.CallToolResult, e
 	return nil, fmt.Errorf("unknown action %q", p.Action)
 }
 
-// fixStoreOwner gives files created by a root (sudo) run back to the store's owner, so later non-sudo runs can write. Only touches CheckpointDir.
 func fixStoreOwner(p checkpointPlan) {
 	if !p.OwnerSet || os.Geteuid() != 0 {
 		return
@@ -188,7 +187,6 @@ func fixStoreOwner(p checkpointPlan) {
 	})
 }
 
-// checkCheckpointSource refuses protected paths and anything inside the checkpoint store.
 func checkCheckpointSource(p checkpointPlan, src string) error {
 	protected := make([]string, len(p.Protected))
 	for i, q := range p.Protected {
@@ -228,7 +226,6 @@ func defaultCheckpointName(src string, now time.Time) string {
 	return base + "-" + now.Format("20060102-150405")
 }
 
-// freePreRestoreName avoids a clash when two restores happen within the same second.
 func freePreRestoreName(dir, name string, now time.Time) string {
 	stamp := now.Format("20060102-150405")
 	for i := 1; ; i++ {
@@ -338,7 +335,6 @@ func (r *restoreRun) fail(path string, err error) {
 	r.failures = append(r.failures, fmt.Sprintf("%s: %v", path, err))
 }
 
-// normalizeOnly turns the user's `only` entries into clean paths relative to source (slash separators).
 func normalizeOnly(source string, only []string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
@@ -367,8 +363,6 @@ func normalizeOnly(source string, only []string) ([]string, error) {
 	return out, nil
 }
 
-// effectiveScope returns the paths a restore or diff is limited to (nil = the whole checkpoint).
-// A partial checkpoint is always limited to its own scope.
 func effectiveScope(snap snapshot, only []string) ([]string, error) {
 	if len(only) == 0 {
 		if len(snap.Partial) == 0 {
@@ -520,8 +514,6 @@ type retentionResult struct {
 	err     error
 }
 
-// applyRetention deletes the oldest checkpoints of one kind (auto or user-made) for one source, keeping the newest
-// `keep` (0 = unlimited). `protect` is never removed. Any failure stops the cleanup; it never fails the caller.
 func applyRetention(dir, source string, auto bool, keep int, protect string) retentionResult {
 	if keep <= 0 {
 		return retentionResult{}
@@ -579,7 +571,6 @@ func limitLines(lines []string) string {
 
 func (r *restoreRun) abs(rel string) string { return filepath.Join(r.src, filepath.FromSlash(rel)) }
 
-// applyDiff makes the folder match target for the paths covered by target and current (both limited to the same scope).
 func (r *restoreRun) applyDiff(p checkpointPlan, target, current []snapEntry, all map[string]snapEntry) {
 	tgt := make(map[string]snapEntry, len(target))
 	for _, e := range target {
@@ -617,7 +608,6 @@ func (r *restoreRun) applyDiff(p checkpointPlan, target, current []snapEntry, al
 		r.trashed++
 	}
 
-	// Parent folders of restored paths that are outside the target set: recreate only if missing, never touch existing ones.
 	var dirs []snapEntry
 	ancestors := map[string]bool{}
 	for _, e := range target {
@@ -820,7 +810,6 @@ func replaceSymlink(dst, target string) error {
 	return nil
 }
 
-// applyMeta sets owner, mode and mtime in that order (chown can clear setuid bits). Symlinks only get an owner.
 func applyMeta(dst string, e snapEntry, isLink bool) error {
 	if err := os.Lchown(dst, e.UID, e.GID); err != nil && !errors.Is(err, fs.ErrPermission) {
 		return err

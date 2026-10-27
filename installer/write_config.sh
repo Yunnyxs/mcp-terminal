@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 write_config() {
   umask 077
   {

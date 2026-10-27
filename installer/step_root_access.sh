@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 step_root_access() {
   local a ans="" stmp root_ok=0
   say "4/6 Root access for Claude (optional)"

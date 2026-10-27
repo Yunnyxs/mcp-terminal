@@ -11,7 +11,6 @@ NOTESDIR="$LOGDIR/notes"
 DEFAULT_PORT=8000
 
 for f in "$KIT"/installer/*.sh; do
-  # shellcheck source=/dev/null
   source "$f"
 done
 

@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 print_summary() {
   echo
   if [ -n "$URL" ]; then

@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 make_notes_dir() {
   mkdir -p "$NOTESDIR"
   chmod 700 "$NOTESDIR"

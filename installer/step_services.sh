@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 step_services() {
   say "5/6 Install and start the services"
   install -m 644 "$KIT/units/terminal-mcp.service" "$UNITS/terminal-mcp.service"

@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 pick_port() {
   local p
   if systemctl --user is-active -q terminal-mcp.service; then

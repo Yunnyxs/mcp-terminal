@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 check_prerequisites() {
   [ "$(id -u)" -ne 0 ] || die "Do not run as root. Run as a regular user."
   command -v go >/dev/null 2>&1 || die "Go is not installed. Arch: sudo pacman -S go"

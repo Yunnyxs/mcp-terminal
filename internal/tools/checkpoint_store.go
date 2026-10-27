@@ -18,25 +18,25 @@ import (
 )
 
 type snapEntry struct {
-	Path    string `json:"path"`             // relatif terhadap folder sumber, pemisah "/"
-	Kind    string `json:"kind"`             // "file" | "dir" | "symlink"
-	Hash    string `json:"hash,omitempty"`   // hanya file
-	Target  string `json:"target,omitempty"` // hanya symlink
+	Path    string `json:"path"`
+	Kind    string `json:"kind"`
+	Hash    string `json:"hash,omitempty"`
+	Target  string `json:"target,omitempty"`
 	Size    int64  `json:"size,omitempty"`
-	Mode    uint32 `json:"mode"`  // hanya bit izin (0o7777)
-	ModTime int64  `json:"mtime"` // unix nano
+	Mode    uint32 `json:"mode"`
+	ModTime int64  `json:"mtime"`
 	UID     int    `json:"uid"`
 	GID     int    `json:"gid"`
 }
 
 type snapshot struct {
 	Name      string      `json:"name"`
-	Source    string      `json:"source"`               // path absolut folder sumber
-	Created   string      `json:"created"`              // RFC3339
-	Entries   []snapEntry `json:"entries"`              // diurutkan berdasarkan Path
-	Partial   []string    `json:"partial,omitempty"`    // cakupan snapshot sebagian (path relatif)
-	Auto      bool        `json:"auto,omitempty"`       // true hanya untuk pre-restore otomatis
-	CreatedNS int64       `json:"created_ns,omitempty"` // unix nano, untuk urutan yang tepat
+	Source    string      `json:"source"`
+	Created   string      `json:"created"`
+	Entries   []snapEntry `json:"entries"`
+	Partial   []string    `json:"partial,omitempty"`
+	Auto      bool        `json:"auto,omitempty"`
+	CreatedNS int64       `json:"created_ns,omitempty"`
 }
 
 type scanStats struct {
@@ -80,7 +80,6 @@ func snapshotPath(dir, name string) string {
 	return filepath.Join(dir, snapshotsDirName, name+snapshotExt)
 }
 
-// writeAtomic writes data to a temp file in the destination folder, then renames it into place.
 func writeAtomic(path string, data []byte, perm os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if err != nil {
@@ -112,7 +111,6 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
-// storeBlob copies the file into blobs/ while hashing it (one read). isNew is false when the blob already existed.
 func storeBlob(dir, src string) (hash string, size int64, isNew bool, err error) {
 	in, err := os.Open(src)
 	if err != nil {
@@ -179,7 +177,6 @@ func entryMeta(info fs.FileInfo) (mode uint32, uid, gid int) {
 	return mode, uid, gid
 }
 
-// inScope reports whether rel is one of the scope paths or below one of them.
 func inScope(rel string, scope []string) bool {
 	for _, s := range scope {
 		if rel == s || strings.HasPrefix(rel, s+"/") {
@@ -211,9 +208,6 @@ func scopedEntries(entries []snapEntry, scope []string) []snapEntry {
 	return out
 }
 
-// scanTree walks root (already symlink-resolved) without following symlinks. With store=true file contents are
-// copied into dir's blobs; otherwise they are only hashed. A nil scope means everything; otherwise only the
-// scope paths and what is below them are recorded.
 func scanTree(dir, root, skipDir string, scope []string, store bool) ([]snapEntry, scanStats, error) {
 	var stats scanStats
 	var entries []snapEntry
@@ -313,7 +307,6 @@ func resolveRoot(source string) (src, walkRoot string, err error) {
 	return src, walkRoot, nil
 }
 
-// scanCurrent reads the current state of source without writing anything (no blobs are stored).
 func scanCurrent(dir, source string, scope []string) ([]snapEntry, scanStats, error) {
 	src, walkRoot, err := resolveRoot(source)
 	if err != nil {
@@ -336,12 +329,10 @@ func takeSnapshot(dir, source, name string) (snapshot, scanStats, error) {
 	return takeSnapshotScoped(dir, source, name, nil)
 }
 
-// takeSnapshotScoped is takeSnapshot limited to the scope paths (nil = everything); a scoped snapshot records them in Partial.
 func takeSnapshotScoped(dir, source, name string, scope []string) (snapshot, scanStats, error) {
 	return takeSnapshotFull(dir, source, name, scope, false)
 }
 
-// takeSnapshotFull also marks the snapshot as automatic (made by restore, subject to retention).
 func takeSnapshotFull(dir, source, name string, scope []string, auto bool) (snapshot, scanStats, error) {
 	var stats scanStats
 	if err := validCheckpointName(name); err != nil {
@@ -460,7 +451,6 @@ func listSnapshots(dir string) ([]snapshot, error) {
 	return out, nil
 }
 
-// snapTime is the creation time in unix nanoseconds; older snapshots only have second precision.
 func snapTime(s snapshot) int64 {
 	if s.CreatedNS != 0 {
 		return s.CreatedNS
@@ -471,7 +461,6 @@ func snapTime(s snapshot) int64 {
 	return 0
 }
 
-// deleteSnapshot removes only the JSON; blobs stay until gcBlobs.
 func deleteSnapshot(dir, name string) error {
 	if err := validCheckpointName(name); err != nil {
 		return err
@@ -573,7 +562,6 @@ func verifyBlob(dir, hash string) error {
 	return nil
 }
 
-// restoreBlob writes the blob to dst via a temp file in dst's folder; dst is untouched unless the hash matches.
 func restoreBlob(dir, hash, dst string) error {
 	if err := validBlobHash(hash); err != nil {
 		return err

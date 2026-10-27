@@ -66,7 +66,6 @@ func cpPreRestore(t *testing.T, s config.Settings, base string) string {
 	return ""
 }
 
-// treeState describes every entry under root (type, mode, content or link target; not mtime).
 func treeState(t *testing.T, root string) string {
 	t.Helper()
 	var b strings.Builder
@@ -712,7 +711,6 @@ func TestCheckpointPartialRecreatesMissingParent(t *testing.T) {
 		t.Error("b.sh was not restored")
 	}
 
-	// an existing parent keeps its own mode
 	if err := os.Chmod(filepath.Join(src, "sub"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -809,7 +807,6 @@ func TestCheckpointRetentionLimitsAutoCheckpointsOnly(t *testing.T) {
 		undo = append(undo, cpUndoName(t, out))
 	}
 	names := cpNames(t, s)
-	// a freed name may be handed out again, so compare with the two newest undo names only
 	if hasName(names, undo[1]) || !hasName(names, undo[2]) || !hasName(names, undo[3]) {
 		t.Errorf("auto checkpoints kept = %v, undo names = %v", names, undo)
 	}

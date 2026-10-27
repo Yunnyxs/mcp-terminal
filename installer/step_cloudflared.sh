@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 step_cloudflared() {
   local arch
   say "3/6 cloudflared"

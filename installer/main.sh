@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 main() {
   check_prerequisites
   mkdir -p "$BIN" "$CONF" "$UNITS"

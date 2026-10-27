@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 find_tunnel_url() {
   URL=""
   for _ in $(seq 1 90); do

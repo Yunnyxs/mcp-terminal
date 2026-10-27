@@ -79,7 +79,6 @@ func checkEdit(op editOp, idx int) error {
 	return nil
 }
 
-// applyEdit applies one edit; idx is the 1-based position in a batch, 0 for the single mode.
 func applyEdit(content string, op editOp, idx int) (string, int, error) {
 	if err := checkEdit(op, idx); err != nil {
 		return "", 0, err

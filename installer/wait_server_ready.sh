@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 wait_server_ready() {
   local code=""
   for _ in $(seq 1 20); do

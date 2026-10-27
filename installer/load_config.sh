@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 load_config() {
   local h
   TOKEN=""

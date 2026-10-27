@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 step_path() {
   local rc="$HOME/.bashrc"
   say "PATH for terminal-mcp"

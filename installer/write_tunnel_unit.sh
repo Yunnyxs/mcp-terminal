@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 write_tunnel_unit() {
   cat > "$UNITS/terminal-mcp-tunnel.service" <<EOF
 [Unit]

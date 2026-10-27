@@ -1,4 +1,3 @@
-# shellcheck shell=bash
 step_config() {
   say "2/6 Configuration and token"
   load_config
