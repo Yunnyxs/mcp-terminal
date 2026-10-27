@@ -22,6 +22,7 @@ func Register(srv *mcp.Server, s config.Settings) {
 	writeTool.register(srv, s)
 	editTool.register(srv, s)
 	deleteTool.register(srv, s)
+	checkpointTool.register(srv, s)
 }
 
 type sudoInput interface{ wantSudo() bool }
@@ -60,10 +61,11 @@ func (t fileTool[In, P]) helper() func(config.Settings, json.RawMessage) (*mcp.C
 }
 
 var helperOps = map[string]func(config.Settings, json.RawMessage) (*mcp.CallToolResult, error){
-	readTool.name:   readTool.helper(),
-	writeTool.name:  writeTool.helper(),
-	editTool.name:   editTool.helper(),
-	deleteTool.name: deleteTool.helper(),
+	readTool.name:       readTool.helper(),
+	writeTool.name:      writeTool.helper(),
+	editTool.name:       editTool.helper(),
+	deleteTool.name:     deleteTool.helper(),
+	checkpointTool.name: checkpointTool.helper(),
 }
 
 func resolve(root, raw string) (string, error) {

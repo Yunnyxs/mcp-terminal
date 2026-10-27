@@ -1,10 +1,17 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"terminal-mcp/internal/config"
 )
 
 func TestReadBasicAndEmpty(t *testing.T) {
@@ -190,7 +197,7 @@ func TestEditSingleAndReplaceAll(t *testing.T) {
 	p := filepath.Join(s.Root, "e.txt")
 	mustWrite(t, p, "one two three", 0o640)
 
-	res, err := callTool(t, editTool, s, editInput{Path: "e.txt", Old: "two", New: "TWO"})
+	res, err := callTool(t, editTool, s, editInput{Path: "e.txt", Old: "two", New: sp("TWO")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +210,7 @@ func TestEditSingleAndReplaceAll(t *testing.T) {
 	}
 
 	mustWrite(t, p, "x x x", 0o644)
-	res, err = callTool(t, editTool, s, editInput{Path: "e.txt", Old: "x", New: "y", ReplaceAll: true})
+	res, err = callTool(t, editTool, s, editInput{Path: "e.txt", Old: "x", New: sp("y"), ReplaceAll: true})
 	if err != nil || !strings.HasPrefix(textOf(res), "replaced 3 occurrence(s)") || mustRead(t, p) != "y y y" {
 		t.Errorf("replace_all: %q err=%v content=%q", textOf(res), err, mustRead(t, p))
 	}
@@ -219,13 +226,13 @@ func TestEditErrors(t *testing.T) {
 		in   editInput
 		want string
 	}{
-		{"empty old", editInput{Path: "e.txt", Old: "", New: "y"}, "old is empty"},
-		{"old equals new", editInput{Path: "e.txt", Old: "x", New: "x"}, "old and new are identical"},
-		{"not found", editInput{Path: "e.txt", Old: "zzz", New: "y"}, "old text not found"},
-		{"matches twice", editInput{Path: "e.txt", Old: "x", New: "y"}, "matches 2 times"},
-		{"file does not exist", editInput{Path: "nope", Old: "x", New: "y"}, "no such file"},
-		{"directory", editInput{Path: ".", Old: "x", New: "y"}, "not a regular file"},
-		{"too large", editInput{Path: "large.bin", Old: "a", New: "b"}, "file too large to edit"},
+		{"empty old", editInput{Path: "e.txt", Old: "", New: sp("y")}, "old is empty"},
+		{"old equals new", editInput{Path: "e.txt", Old: "x", New: sp("x")}, "old and new are identical"},
+		{"not found", editInput{Path: "e.txt", Old: "zzz", New: sp("y")}, "old text not found"},
+		{"matches twice", editInput{Path: "e.txt", Old: "x", New: sp("y")}, "matches 2 times"},
+		{"file does not exist", editInput{Path: "nope", Old: "x", New: sp("y")}, "no such file"},
+		{"directory", editInput{Path: ".", Old: "x", New: sp("y")}, "not a regular file"},
+		{"too large", editInput{Path: "large.bin", Old: "a", New: sp("b")}, "file too large to edit"},
 	}
 	for _, c := range cases {
 		_, err := callTool(t, editTool, s, c.in)
@@ -236,4 +243,200 @@ func TestEditErrors(t *testing.T) {
 	if mustRead(t, p) != "x x" {
 		t.Error("the file changed although every edit was rejected")
 	}
+}
+
+func TestEditBatchSequential(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "alpha beta gamma", 0o640)
+
+	res, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{
+		{Old: "alpha", New: sp("one")},
+		{Old: "one beta", New: sp("one-two")},
+		{Old: "gamma", New: sp("three")},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "applied 3 edits (3 replacements) in " + p; textOf(res) != want {
+		t.Errorf("result = %q, want %q", textOf(res), want)
+	}
+	if got := mustRead(t, p); got != "one-two three" {
+		t.Errorf("content = %q", got)
+	}
+	if info, _ := os.Stat(p); info.Mode().Perm() != 0o640 {
+		t.Errorf("mode = %v", info.Mode().Perm())
+	}
+}
+
+func TestEditBatchAtomicAndNumbered(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "a b c", 0o644)
+
+	_, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{
+		{Old: "a", New: sp("A")},
+		{Old: "b", New: sp("B")},
+		{Old: "zzz", New: sp("Z")},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "edit #3: old text not found") {
+		t.Errorf("err = %v, want edit #3 not found", err)
+	}
+	if got := mustRead(t, p); got != "a b c" {
+		t.Errorf("file changed after a failed batch: %q", got)
+	}
+
+	for name, op := range map[string]editOp{
+		"edit #1: old is empty":              {Old: "", New: sp("x")},
+		"edit #1: new is required":           {Old: "a"},
+		"edit #1: old and new are identical": {Old: "a", New: sp("a")},
+	} {
+		_, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{op}})
+		if err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("err = %v, want %q", err, name)
+		}
+	}
+}
+
+func TestEditModeValidation(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "a b", 0o644)
+	one := []editOp{{Old: "a", New: sp("A")}}
+
+	cases := []struct {
+		name string
+		in   editInput
+		want string
+	}{
+		{"old with edits", editInput{Path: "b.txt", Old: "a", Edits: one}, "use either old/new or edits, not both"},
+		{"new with edits", editInput{Path: "b.txt", New: sp(""), Edits: one}, "use either old/new or edits, not both"},
+		{"top-level replace_all with edits", editInput{Path: "b.txt", ReplaceAll: true, Edits: one}, "replace_all goes inside each edit, not at top level"},
+		{"empty edits", editInput{Path: "b.txt", Edits: []editOp{}}, "edits is empty"},
+		{"new missing", editInput{Path: "b.txt", Old: "a"}, "new is required"},
+	}
+	for _, c := range cases {
+		_, err := callTool(t, editTool, s, c.in)
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
+		}
+	}
+	if mustRead(t, p) != "a b" {
+		t.Error("file changed although every edit was rejected")
+	}
+}
+
+func TestEditEmptyNewDeletesText(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "keep drop keep", 0o644)
+	if _, err := callTool(t, editTool, s, editInput{Path: "b.txt", Old: " drop", New: sp("")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustRead(t, p); got != "keep keep" {
+		t.Errorf("content = %q", got)
+	}
+	if _, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{{Old: "keep keep", New: sp("")}}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustRead(t, p); got != "" {
+		t.Errorf("content = %q", got)
+	}
+}
+
+func batchOf(n int) ([]editOp, string) {
+	var ops []editOp
+	var parts []string
+	for i := 0; i < n; i++ {
+		id := strconv.Itoa(i)
+		ops = append(ops, editOp{Old: "<" + id + ">", New: sp("[" + id + "]")})
+		parts = append(parts, "<"+id+">")
+	}
+	return ops, strings.Join(parts, " ")
+}
+
+func TestEditBatchLimit(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	ops, content := batchOf(11)
+	mustWrite(t, p, content, 0o644)
+
+	_, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: ops})
+	if err == nil || !strings.Contains(err.Error(), "too many edits (11, max 10): split into several calls or raise TERMINAL_MCP_MAX_EDITS") {
+		t.Errorf("err = %v", err)
+	}
+	if mustRead(t, p) != content {
+		t.Error("file changed although the batch was rejected")
+	}
+
+	s.MaxEdits = 20
+	res, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: ops})
+	if err != nil || !strings.HasPrefix(textOf(res), "applied 11 edits (11 replacements)") {
+		t.Errorf("11 edits with MaxEdits=20: %q err=%v", textOf(res), err)
+	}
+}
+
+func TestEditBatchReplaceAll(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "x x x y y", 0o644)
+	res, err := callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{
+		{Old: "x", New: sp("z"), ReplaceAll: true},
+		{Old: "y", New: sp("w")},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "edit #2: old text matches 2 times") {
+		t.Fatalf("res=%v err=%v, want edit #2 to match twice", res, err)
+	}
+	res, err = callTool(t, editTool, s, editInput{Path: "b.txt", Edits: []editOp{
+		{Old: "x", New: sp("z"), ReplaceAll: true},
+		{Old: "y", New: sp("w"), ReplaceAll: true},
+	}})
+	if err != nil || textOf(res) != "applied 2 edits (5 replacements) in "+p || mustRead(t, p) != "z z z w w" {
+		t.Errorf("res=%q err=%v content=%q", textOf(res), err, mustRead(t, p))
+	}
+}
+
+func TestEditBatchThroughSudoHelper(t *testing.T) {
+	s := testSettings(t)
+	p := filepath.Join(s.Root, "b.txt")
+	mustWrite(t, p, "one two", 0o644)
+	raw := `{"path":"` + p + `","edits":[{"old":"one","new":"1"},{"old":"two","new":""}]}`
+	res, err := helperOps["edit"](config.Settings{Root: "/"}, json.RawMessage(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "applied 2 edits (2 replacements) in " + p; textOf(res) != want {
+		t.Errorf("result = %q, want %q", textOf(res), want)
+	}
+	if got := mustRead(t, p); got != "1 " {
+		t.Errorf("content = %q", got)
+	}
+}
+
+func TestEditSchemaOnlyPathRequired(t *testing.T) {
+	s := testSettings(t)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	Register(srv, s)
+	list, err := connect(t, srv).ListTools(context.Background(), &mcp.ListToolsParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range list.Tools {
+		if tool.Name != "edit" {
+			continue
+		}
+		raw, _ := json.Marshal(tool.InputSchema)
+		t.Logf("edit schema: %s", raw)
+		var sch struct {
+			Required []string `json:"required"`
+		}
+		if err := json.Unmarshal(raw, &sch); err != nil {
+			t.Fatal(err)
+		}
+		if len(sch.Required) != 1 || sch.Required[0] != "path" {
+			t.Errorf("required = %v, want [path]", sch.Required)
+		}
+		return
+	}
+	t.Error("edit tool not registered")
 }

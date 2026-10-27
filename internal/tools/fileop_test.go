@@ -94,7 +94,7 @@ func TestHelperOpsMatchRegisteredTools(t *testing.T) {
 			t.Errorf("tool %s has Annotations: %+v", tool.Name, tool.Annotations)
 		}
 	}
-	if want := []string{"delete", "edit", "read", "run", "write"}; !slices.Equal(sorted(names), want) {
+	if want := []string{"checkpoint", "delete", "edit", "read", "run", "write"}; !slices.Equal(sorted(names), want) {
 		t.Errorf("registered tools = %v, want %v", sorted(names), want)
 	}
 	for _, name := range names {

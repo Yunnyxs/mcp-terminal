@@ -24,14 +24,18 @@ func testSettings(t *testing.T) config.Settings {
 		}
 	}
 	return config.Settings{
-		Root:        root,
-		Shell:       "/bin/sh",
-		Timeout:     10 * time.Second,
-		MaxOutput:   30000,
-		TrashDir:    filepath.Join(data, "Trash"),
-		NotesDir:    filepath.Join(data, "notes"),
-		ActivityLog: filepath.Join(data, "activity.log"),
-		ServerLog:   filepath.Join(data, "server.log"),
+		Root:               root,
+		Shell:              "/bin/sh",
+		Timeout:            10 * time.Second,
+		MaxOutput:          30000,
+		MaxEdits:           config.DefaultMaxEdits,
+		CheckpointKeepAuto: 2,
+		CheckpointKeepMax:  3,
+		TrashDir:           filepath.Join(data, "Trash"),
+		NotesDir:           filepath.Join(data, "notes"),
+		CheckpointDir:      filepath.Join(data, "Checkpoints"),
+		ActivityLog:        filepath.Join(data, "activity.log"),
+		ServerLog:          filepath.Join(data, "server.log"),
 	}
 }
 
@@ -68,3 +72,5 @@ func mustRead(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+func sp(s string) *string { return &s }

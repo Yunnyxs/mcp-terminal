@@ -18,32 +18,42 @@ const (
 	DefaultMaxOutput  = 30000
 	DefaultLLMOutput  = 8000
 	DefaultLogMaxMB   = 400
+	DefaultMaxEdits   = 10
+
+	DefaultCheckpointKeepAuto = 5
+	DefaultCheckpointKeepMax  = 20
 
 	ServerLogMaxBytes = 50 << 20
 
-	noMax        = 1<<31 - 1
-	maxOutputCap = 10_000_000
-	logMaxMBCap  = 1 << 20
+	noMax             = 1<<31 - 1
+	maxOutputCap      = 10_000_000
+	logMaxMBCap       = 1 << 20
+	maxEditsCap       = 100
+	checkpointKeepCap = 1000
 )
 
 type Lookup func(key string) string
 
 type Settings struct {
-	Host        string
-	Port        int
-	Token       string
-	Root        string
-	Shell       string
-	Timeout     time.Duration
-	MaxOutput   int
-	Compact     bool
-	LLMOutput   int
-	LogMaxBytes int64
-	ActivityLog string
-	ServerLog   string
-	TrashDir    string
-	NotesDir    string
-	Paths       Paths
+	Host               string
+	Port               int
+	Token              string
+	Root               string
+	Shell              string
+	Timeout            time.Duration
+	MaxOutput          int
+	Compact            bool
+	LLMOutput          int
+	MaxEdits           int
+	CheckpointKeepAuto int
+	CheckpointKeepMax  int
+	LogMaxBytes        int64
+	ActivityLog        string
+	ServerLog          string
+	TrashDir           string
+	NotesDir           string
+	CheckpointDir      string
+	Paths              Paths
 }
 
 type Limits struct {
@@ -105,6 +115,15 @@ func Load(get Lookup) (Settings, error) {
 	if s.LLMOutput, err = intVal(get, "TERMINAL_MCP_LLM_OUTPUT", DefaultLLMOutput, 500, maxOutputCap); err != nil {
 		return Settings{}, err
 	}
+	if s.MaxEdits, err = intVal(get, "TERMINAL_MCP_MAX_EDITS", DefaultMaxEdits, 1, maxEditsCap); err != nil {
+		return Settings{}, err
+	}
+	if s.CheckpointKeepAuto, err = intVal(get, "TERMINAL_MCP_CHECKPOINT_KEEP_AUTO", DefaultCheckpointKeepAuto, 0, checkpointKeepCap); err != nil {
+		return Settings{}, err
+	}
+	if s.CheckpointKeepMax, err = intVal(get, "TERMINAL_MCP_CHECKPOINT_KEEP", DefaultCheckpointKeepMax, 0, checkpointKeepCap); err != nil {
+		return Settings{}, err
+	}
 	logMaxMB, err := intVal(get, "TERMINAL_MCP_LOG_MAX_MB", DefaultLogMaxMB, 1, logMaxMBCap)
 	if err != nil {
 		return Settings{}, err
@@ -119,6 +138,7 @@ func Load(get Lookup) (Settings, error) {
 		{&s.ServerLog, "TERMINAL_MCP_LOG", "terminal_mcp.log"},
 		{&s.TrashDir, "TERMINAL_MCP_TRASH", "Trash"},
 		{&s.NotesDir, "TERMINAL_MCP_NOTES", "notes"},
+		{&s.CheckpointDir, "TERMINAL_MCP_CHECKPOINTS", "Checkpoints"},
 	} {
 		if *f.dst, err = pathVal(get, f.key, filepath.Join(paths.Dir, f.label)); err != nil {
 			return Settings{}, err

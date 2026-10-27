@@ -83,7 +83,7 @@ func TestNewAdvertisesIdentityInstructionsAndTools(t *testing.T) {
 	for _, tool := range list.Tools {
 		names = append(names, tool.Name)
 	}
-	if got := strings.Join(sortedCopy(names), ","); got != "delete,edit,read,run,write" {
+	if got := strings.Join(sortedCopy(names), ","); got != "checkpoint,delete,edit,read,run,write" {
 		t.Errorf("tool = %s", got)
 	}
 }
@@ -162,7 +162,7 @@ func TestHTTPEndToEndWithRealClient(t *testing.T) {
 		t.Errorf("ServerInfo = %+v", cs.InitializeResult().ServerInfo)
 	}
 	list, err := cs.ListTools(ctx, &mcp.ListToolsParams{})
-	if err != nil || len(list.Tools) != 5 {
+	if err != nil || len(list.Tools) != 6 {
 		t.Fatalf("ListTools = %d tool, %v", len(list.Tools), err)
 	}
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "run", Arguments: map[string]any{"command": "echo via-http"}})

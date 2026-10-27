@@ -19,22 +19,26 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	data := filepath.Join(home, ".mcp-terminal")
 	want := map[string][2]string{
-		"Host":        {s.Host, "127.0.0.1"},
-		"Shell":       {s.Shell, "/bin/zsh"},
-		"Root":        {s.Root, home},
-		"ActivityLog": {s.ActivityLog, filepath.Join(data, "activity_terminal_mcp.log")},
-		"ServerLog":   {s.ServerLog, filepath.Join(data, "terminal_mcp.log")},
-		"TrashDir":    {s.TrashDir, filepath.Join(data, "Trash")},
-		"NotesDir":    {s.NotesDir, filepath.Join(data, "notes")},
-		"Paths.Dir":   {s.Paths.Dir, data},
-		"Paths.MCPs":  {s.Paths.MCPs, filepath.Join(home, ".config", "terminal-mcp", "mcps.json")},
+		"Host":          {s.Host, "127.0.0.1"},
+		"Shell":         {s.Shell, "/bin/zsh"},
+		"Root":          {s.Root, home},
+		"ActivityLog":   {s.ActivityLog, filepath.Join(data, "activity_terminal_mcp.log")},
+		"ServerLog":     {s.ServerLog, filepath.Join(data, "terminal_mcp.log")},
+		"TrashDir":      {s.TrashDir, filepath.Join(data, "Trash")},
+		"NotesDir":      {s.NotesDir, filepath.Join(data, "notes")},
+		"CheckpointDir": {s.CheckpointDir, filepath.Join(data, "Checkpoints")},
+		"Paths.Dir":     {s.Paths.Dir, data},
+		"Paths.MCPs":    {s.Paths.MCPs, filepath.Join(home, ".config", "terminal-mcp", "mcps.json")},
 	}
 	for name, p := range want {
 		if p[0] != p[1] {
 			t.Errorf("%s = %q, want %q", name, p[0], p[1])
 		}
 	}
-	if s.Port != 8000 || s.Timeout != 120*time.Second || s.MaxOutput != 30000 || s.LogMaxBytes != 400<<20 {
+	if s.CheckpointKeepAuto != 5 || s.CheckpointKeepMax != 20 {
+		t.Errorf("wrong checkpoint retention defaults: auto=%d max=%d", s.CheckpointKeepAuto, s.CheckpointKeepMax)
+	}
+	if s.MaxEdits != 10 || s.Port != 8000 || s.Timeout != 120*time.Second || s.MaxOutput != 30000 || s.LogMaxBytes != 400<<20 {
 		t.Errorf("wrong default numbers: %+v", s)
 	}
 }
@@ -88,6 +92,14 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"timeout zero", map[string]string{"TERMINAL_MCP_TIMEOUT": "0"}, "TERMINAL_MCP_TIMEOUT must be 1-"},
 		{"max output too small", map[string]string{"TERMINAL_MCP_MAX_OUTPUT": "999"}, "TERMINAL_MCP_MAX_OUTPUT must be 1000-10000000"},
 		{"log mb zero", map[string]string{"TERMINAL_MCP_LOG_MAX_MB": "0"}, "TERMINAL_MCP_LOG_MAX_MB must be 1-"},
+		{"max edits zero", map[string]string{"TERMINAL_MCP_MAX_EDITS": "0"}, "TERMINAL_MCP_MAX_EDITS must be 1-100"},
+		{"max edits too big", map[string]string{"TERMINAL_MCP_MAX_EDITS": "101"}, "TERMINAL_MCP_MAX_EDITS must be 1-100"},
+		{"max edits not an integer", map[string]string{"TERMINAL_MCP_MAX_EDITS": "abc"}, "TERMINAL_MCP_MAX_EDITS must be an integer"},
+		{"max edits negative", map[string]string{"TERMINAL_MCP_MAX_EDITS": "-1"}, "TERMINAL_MCP_MAX_EDITS must be 1-100"},
+		{"keep auto negative", map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP_AUTO": "-1"}, "TERMINAL_MCP_CHECKPOINT_KEEP_AUTO must be 0-1000"},
+		{"keep auto too big", map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP_AUTO": "1001"}, "TERMINAL_MCP_CHECKPOINT_KEEP_AUTO must be 0-1000"},
+		{"keep not an integer", map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP": "abc"}, "TERMINAL_MCP_CHECKPOINT_KEEP must be an integer"},
+		{"keep too big", map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP": "1001"}, "TERMINAL_MCP_CHECKPOINT_KEEP must be 0-1000"},
 		{"root not a directory", map[string]string{"TERMINAL_MCP_ROOT": notDir}, "TERMINAL_MCP_ROOT is not a directory"},
 		{"root missing", map[string]string{"TERMINAL_MCP_ROOT": filepath.Join(root, "nope")}, "TERMINAL_MCP_ROOT is not a directory"},
 	}
@@ -99,6 +111,26 @@ func TestLoadRejectsBadValues(t *testing.T) {
 				t.Errorf("err = %v, want containing %q", err, c.want)
 			}
 		})
+	}
+}
+
+func TestLoadMaxEdits(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, err := Load(env(map[string]string{"TERMINAL_MCP_MAX_EDITS": "25"}))
+	if err != nil || s.MaxEdits != 25 {
+		t.Errorf("MaxEdits = %d err=%v, want 25", s.MaxEdits, err)
+	}
+}
+
+func TestLoadCheckpointRetention(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, err := Load(env(map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP_AUTO": "2", "TERMINAL_MCP_CHECKPOINT_KEEP": "3"}))
+	if err != nil || s.CheckpointKeepAuto != 2 || s.CheckpointKeepMax != 3 {
+		t.Errorf("retention = %d/%d err=%v, want 2/3", s.CheckpointKeepAuto, s.CheckpointKeepMax, err)
+	}
+	s, err = Load(env(map[string]string{"TERMINAL_MCP_CHECKPOINT_KEEP_AUTO": "0", "TERMINAL_MCP_CHECKPOINT_KEEP": "0"}))
+	if err != nil || s.CheckpointKeepAuto != 0 || s.CheckpointKeepMax != 0 {
+		t.Errorf("zero must be accepted (unlimited): %d/%d err=%v", s.CheckpointKeepAuto, s.CheckpointKeepMax, err)
 	}
 }
 

@@ -381,7 +381,7 @@ func TestStdioMode(t *testing.T) {
 			t.Errorf("tool %s has Annotations", tool.Name)
 		}
 	}
-	if got := strings.Join(sortedStrings(names), ","); got != "delete,edit,read,run,write" {
+	if got := strings.Join(sortedStrings(names), ","); got != "checkpoint,delete,edit,read,run,write" {
 		t.Errorf("tool = %s", got)
 	}
 

@@ -45,7 +45,7 @@ Tool descriptions and parameters are intentionally short, because the schema is 
 | `run`    | Run a shell command. Long output is summarized. | `command`, `cwd`, `timeout` (1-3600 s), `raw` |
 | `read`   | Read a UTF-8 text file by byte range. The output ends with `next_offset` when truncated. | `path`, `offset`, `limit`, `sudo` |
 | `write`  | Write a whole file atomically. Refuses to replace an existing file unless `overwrite=true`. | `path`, `content`, `overwrite`, `sudo` |
-| `edit`   | Replace exact text in an existing file. Fails if the text is missing or matches more than once (unless `replace_all`). | `path`, `old`, `new`, `replace_all`, `sudo` |
+| `edit`   | Replace exact text in an existing file. Fails if the text is missing or matches more than once (unless `replace_all`). Use `edits` for several replacements in one call, applied in order, all-or-nothing. | `path`, `old`, `new`, `edits`, `replace_all`, `sudo` |
 | `delete` | Delete files or directories by explicit path (no wildcards, max 50). Moves to Trash unless `permanent=true`. | `paths`, `recursive`, `permanent`, `sudo` |
 
 Notes:
@@ -168,6 +168,7 @@ silently ignored.
 | `TERMINAL_MCP_TIMEOUT` | `120` | Default command timeout in seconds. |
 | `TERMINAL_MCP_MAX_OUTPUT` | `30000` | Capture and log limit for `run` output (1000-10000000). |
 | `TERMINAL_MCP_LLM_OUTPUT` | `8000` | Limit for the output body sent to the client (min 500). |
+| `TERMINAL_MCP_MAX_EDITS` | `10` | Maximum number of `edits` per `edit` call (1-100). |
 | `TERMINAL_MCP_COMPACT` | on | Boolean (`1/true/on/yes`, `0/false/off/no`) to enable output compaction. |
 | `TERMINAL_MCP_SHELL` | `$SHELL`, or `/bin/bash` | Shell used by `run`. |
 | `TERMINAL_MCP_LOG_MAX_MB` | `400` | Size limit that triggers log rotation. |

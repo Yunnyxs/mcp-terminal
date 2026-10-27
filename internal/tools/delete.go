@@ -94,6 +94,7 @@ func protectedPaths(s config.Settings) []string {
 	add(s.Root)
 	add(s.TrashDir)
 	add(s.NotesDir)
+	add(s.CheckpointDir)
 	add(s.ActivityLog)
 	add(s.ServerLog)
 	if exe, err := os.Executable(); err == nil {

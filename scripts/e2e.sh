@@ -314,6 +314,106 @@ has "delete wildcard is not expanded" "$F.9" "wildcards are not expanded"
 is  "read of a missing file: isError" "$(cat "$F.10.err")" "1"
 grep -q 'one' "$AL" && ok "the log records the full write content" || bad "the write content is missing from the activity log"
 
+echo "== checkpoint (create / restore / list / delete)"
+CP=$HOME/cpdir
+mkdir -p "$CP/sub"
+printf 'one\n' > "$CP/a.txt"; printf 'deep\n' > "$CP/sub/b.txt"; printf 'gone\n' > "$CP/gone.txt"
+ln -s a.txt "$CP/ln"; chmod 640 "$CP/a.txt"
+C1=$W/cp1
+stdio "$C1" \
+  checkpoint '{"action":"create","path":"cpdir","name":"base"}' \
+  checkpoint '{"action":"create","path":"cpdir","name":"base"}' \
+  checkpoint '{"action":"create","path":"/"}' \
+  || bad "checkpoint session 1 failed"
+has "checkpoint create: reply" "$C1.1" 'Checkpoint "base" created'
+has "checkpoint create: counts" "$C1.1" "files: 3, dirs: 1, symlinks: 1"
+is  "checkpoint create: duplicate name is rejected" "$(cat "$C1.2.err")" "1"
+has "checkpoint create: duplicate name message" "$C1.2" "already exists"
+is  "checkpoint create: / is rejected" "$(cat "$C1.3.err")" "1"
+[ -f "$TMCP_DIR/Checkpoints/snapshots/base.json" ] && ok "checkpoint create: snapshot file exists" || bad "checkpoint create: snapshot file is missing"
+
+printf 'changed\n' > "$CP/a.txt"; chmod 600 "$CP/a.txt"; rm "$CP/gone.txt"
+printf 'extra\n' > "$CP/extra.txt"; rm "$CP/ln"; ln -s sub/b.txt "$CP/ln"
+C2=$W/cp2
+stdio "$C2" \
+  checkpoint '{"action":"restore","name":"base"}' \
+  || bad "checkpoint session 2 failed"
+has "checkpoint restore without confirm: preview" "$C2.1" "Nothing was changed"
+is  "checkpoint restore without confirm: nothing changed" "$(cat "$CP/a.txt")" "changed"
+is  "checkpoint restore without confirm: nothing moved to Trash" "$([ -e "$TMCP_DIR/Trash/files/extra.txt" ] && echo yes || echo no)" "no"
+C2=$W/cp2b
+stdio "$C2" \
+  checkpoint '{"action":"restore","name":"base","confirm":true}' \
+  checkpoint '{"action":"list"}' \
+  || bad "checkpoint session 2b failed"
+is  "checkpoint restore with confirm: not an error" "$(cat "$C2.1.err")" "0"
+has "checkpoint restore with confirm: summary" "$C2.1" "moved to Trash: 1"
+is  "checkpoint restore: changed file is back" "$(cat "$CP/a.txt")" "one"
+is  "checkpoint restore: mode is back" "$(stat -c %a "$CP/a.txt")" "640"
+is  "checkpoint restore: deleted file is back" "$(cat "$CP/gone.txt" 2>/dev/null)" "gone"
+is  "checkpoint restore: symlink is back" "$(readlink "$CP/ln")" "a.txt"
+[ ! -e "$CP/extra.txt" ] && [ "$(cat "$TMCP_DIR/Trash/files/extra.txt" 2>/dev/null)" = "extra" ] \
+  && ok "checkpoint restore: the extra file is in Trash" || bad "checkpoint restore: the extra file is not in Trash"
+has "checkpoint list: base" "$C2.2" "base  $CP"
+has "checkpoint list: pre-restore checkpoint" "$C2.2" "pre-restore-base-"
+
+PRE=$(grep -o 'pre-restore-base-[0-9-]*' "$C2.2" | head -1)
+C3=$W/cp3
+stdio "$C3" \
+  checkpoint "{\"action\":\"restore\",\"name\":\"$PRE\",\"confirm\":true}" \
+  checkpoint '{"action":"delete","name":"base"}' \
+  checkpoint '{"action":"list","path":"cpdir"}' \
+  || bad "checkpoint session 3 failed"
+is  "checkpoint undo: the pre-restore state is back (a.txt)" "$(cat "$CP/a.txt")" "changed"
+is  "checkpoint undo: the extra file is back" "$(cat "$CP/extra.txt" 2>/dev/null)" "extra"
+[ ! -e "$CP/gone.txt" ] && ok "checkpoint undo: the removed file is gone again" || bad "checkpoint undo: gone.txt still exists"
+is  "checkpoint undo: symlink is back" "$(readlink "$CP/ln")" "sub/b.txt"
+has "checkpoint delete: reply" "$C3.2" 'Checkpoint "base" deleted'
+lacks "checkpoint list after delete: base is gone" "$C3.3" "base  $CP"
+
+C4=$W/cp4
+stdio "$C4" checkpoint '{"action":"create","path":"cpdir","name":"base2"}' || bad "checkpoint session 4 failed"
+printf 'second\n' > "$CP/a.txt"; printf 'new\n' > "$CP/new.txt"; printf 'deep2\n' > "$CP/sub/b.txt"
+C5=$W/cp5
+stdio "$C5" \
+  checkpoint '{"action":"diff","name":"base2"}' \
+  checkpoint '{"action":"restore","name":"base2","only":["a.txt"]}' \
+  checkpoint '{"action":"restore","name":"base2","only":["nope.txt"],"confirm":true}' \
+  checkpoint '{"action":"restore","name":"base2","only":["../x"],"confirm":true}' \
+  checkpoint '{"action":"restore","name":"base2","only":["a.txt"],"confirm":true}' \
+  checkpoint '{"action":"list"}' \
+  || bad "checkpoint session 5 failed"
+has "checkpoint diff: summary" "$C5.1" "added: 1, modified: 2, deleted: 0"
+has "checkpoint diff: modified file" "$C5.1" "~ a.txt"
+has "checkpoint diff: added file" "$C5.1" "+ new.txt"
+has "checkpoint partial restore without confirm: names the scope" "$C5.2" "Scope: only these paths will be replaced: a.txt"
+is  "checkpoint partial restore: unknown only entry is rejected" "$(cat "$C5.3.err")" "1"
+has "checkpoint partial restore: unknown only entry message" "$C5.3" "not in checkpoint"
+is  "checkpoint partial restore: ../ is rejected" "$(cat "$C5.4.err")" "1"
+is  "checkpoint partial restore: the chosen file is back" "$(cat "$CP/a.txt")" "changed"
+is  "checkpoint partial restore: other changed file is left alone" "$(cat "$CP/sub/b.txt")" "deep2"
+is  "checkpoint partial restore: unrelated new file is left alone" "$(cat "$CP/new.txt")" "new"
+has "checkpoint list: partial checkpoint is marked" "$C5.6" "[partial: 1 paths]"
+
+RP=$HOME/retdir
+mkdir -p "$RP"
+for i in 1 2 3; do
+  printf 'v%s' "$i" > "$RP/f.txt"
+  TERMINAL_MCP_CHECKPOINT_KEEP=2 stdio "$W/cp6$i" checkpoint "{\"action\":\"create\",\"path\":\"retdir\",\"name\":\"r$i\"}" || bad "checkpoint retention session $i failed"
+done
+lacks "checkpoint retention: no cleanup while under the limit" "$W/cp62.1" "retention"
+has   "checkpoint retention: the oldest user checkpoint is removed" "$W/cp63.1" "retention removed 1 old checkpoint(s): r1"
+stdio "$W/cp64" checkpoint '{"action":"list","path":"retdir"}' || bad "checkpoint retention list failed"
+lacks "checkpoint retention: removed checkpoint is not listed" "$W/cp64.1" "r1  "
+has   "checkpoint retention: newer checkpoints are kept" "$W/cp64.1" "r3  "
+for i in 1 2; do
+  printf 'dirty%s' "$i" > "$RP/f.txt"
+  TERMINAL_MCP_CHECKPOINT_KEEP_AUTO=1 stdio "$W/cp65$i" checkpoint '{"action":"restore","name":"r3","confirm":true}' || bad "checkpoint auto retention session $i failed"
+done
+lacks "checkpoint retention: first auto checkpoint is kept" "$W/cp651.1" "retention"
+has   "checkpoint retention: the older auto checkpoint is removed" "$W/cp652.1" "retention removed 1 old checkpoint(s): pre-restore-r3-"
+is    "checkpoint retention: user checkpoints are untouched by auto cleanup" "$(ls "$TMCP_DIR/Checkpoints/snapshots" | grep -c '^r[23]\.json$')" "2"
+
 echo "== sudo=true (helper fileop)"
 if [ "${E2E_SUDO:-1}" = 0 ]; then
   skip "E2E_SUDO=0"
